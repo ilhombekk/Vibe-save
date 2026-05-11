@@ -19,7 +19,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const BOT_USERNAME = "VibeSaveRobot";
 const BOT_LINK = `https://t.me/${BOT_USERNAME}`;
 
-const defaultYtDlpPath = path.join(
+const localYtDlpPath = path.join(
     __dirname,
     "node_modules",
     "yt-dlp-exec",
@@ -27,14 +27,28 @@ const defaultYtDlpPath = path.join(
     process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"
 );
 
-const YT_DLP_PATH = process.env.YT_DLP_PATH || defaultYtDlpPath;
+const YT_DLP_PATH = [
+    process.env.YT_DLP_PATH,
+    localYtDlpPath,
+    process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp",
+].find((p) => typeof p === "string" && (p === "yt-dlp" || p === "yt-dlp.exe" || fs.existsSync(p)));
+
+if (!YT_DLP_PATH) {
+    console.error("❌ yt-dlp binary topilmadi. Iltimos YT_DLP_PATH muhit o‘zgaruvchisini sozlang.");
+    process.exit(1);
+}
+
 const ytdlp = ytdlpExec.create(YT_DLP_PATH);
 
-const GALLERY_DL_PATH =
-    process.env.GALLERY_DL_PATH ||
-    (process.platform === "win32"
-        ? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
-        : "/opt/render/project/.venv/bin/gallery-dl");
+const localGalleryDlPath = process.platform === "win32"
+    ? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
+    : "/opt/render/project/.venv/bin/gallery-dl";
+
+const GALLERY_DL_PATH = [
+    process.env.GALLERY_DL_PATH,
+    localGalleryDlPath,
+    "gallery-dl",
+].find((p) => typeof p === "string" && (p === "gallery-dl" || fs.existsSync(p))) || "gallery-dl";
 
 const COOKIES_PATH = path.join(__dirname, "cookies.txt");
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
