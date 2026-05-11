@@ -1,6 +1,19 @@
 process.env.NTBA_FIX_350 = "1";
 require("dotenv").config();
 
+const express = require("express");
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+    res.send("VibeSaveRobot ishlayapti 🔥");
+});
+
+app.listen(PORT, () => {
+    console.log(`Server ${PORT} portda ishladi`);
+});
+
 const TelegramBot = require("node-telegram-bot-api");
 const ytdlp = require("yt-dlp-exec");
 const yts = require("yt-search");
