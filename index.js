@@ -4,16 +4,6 @@ require("dotenv").config();
 const express = require("express");
 const app = express();
 
-const PORT = process.env.PORT || 3000;
-
-app.get("/", (req, res) => {
-    res.send("VibeSaveRobot ishlayapti 🔥");
-});
-
-app.listen(PORT, () => {
-    console.log(`Server ${PORT} portda ishladi`);
-});
-
 const TelegramBot = require("node-telegram-bot-api");
 const ytdlp = require("yt-dlp-exec");
 const yts = require("yt-search");
@@ -24,15 +14,31 @@ const util = require("util");
 
 const execFileAsync = util.promisify(execFile);
 
+const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const BOT_USERNAME = "VibeSaveRobot";
 const BOT_LINK = `https://t.me/${BOT_USERNAME}`;
 
 const GALLERY_DL_PATH =
-"C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe";
+process.platform === "win32"
+? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
+: "gallery-dl";
+
+const YT_DLP_PATH =
+process.platform === "win32"
+? path.join(__dirname, "node_modules", "yt-dlp-exec", "bin", "yt-dlp.exe")
+: "yt-dlp";
 
 const COOKIES_PATH = path.join(__dirname, "cookies.txt");
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
+
+app.get("/", (req, res) => {
+    res.send("VibeSaveRobot ishlayapti 🔥");
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 Server ${PORT} portda ishladi`);
+});
 
 if (!BOT_TOKEN) {
     console.error("❌ BOT_TOKEN .env ichida yo‘q");
@@ -163,6 +169,7 @@ function getFormatKeyboard(cacheId, url) {
 
 function getYtDlpBaseOptions() {
     const options = {
+        binary: YT_DLP_PATH,
         noWarnings: true,
         noCheckCertificates: true,
     };
@@ -175,13 +182,11 @@ function getYtDlpBaseOptions() {
 }
 
 async function sendLoading(chatId, originalMessageId) {
-    const msg = await bot
+    return bot
     .sendMessage(chatId, "⏳", {
         reply_to_message_id: originalMessageId,
     })
     .catch(() => null);
-    
-    return msg;
 }
 
 async function getMediaInfoByUrl(mediaUrl) {
@@ -322,20 +327,19 @@ async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
         return bot.sendMessage(chatId, "❌ Ma’lumot eskirgan. Qayta yuboring.");
     }
     
-    const waitMsg = await bot.sendMessage(chatId, "⏳");
-    let downloadedFile = null;
     let loadingMsg = null;
+    let downloadedFile = null;
     
     try {
+        if (originalMessageId) {
+            loadingMsg = await sendLoading(chatId, originalMessageId);
+        } else {
+            loadingMsg = await bot.sendMessage(chatId, "⏳").catch(() => null);
+        }
+        
         const title = safeName(data.title);
         const prefix = `${Date.now()}-${title}`;
         const outputTemplate = path.join(DOWNLOAD_DIR, `${prefix}.%(ext)s`);
-        
-        // Agar link yuborilganda oldindan loading chiqqan bo‘lsa,
-        // bu yerda ikkinchi marta chiqarmaymiz
-        if (originalMessageId && type !== "video") {
-            loadingMsg = await sendLoading(chatId, originalMessageId);
-        }
         
         if (type === "audio") {
             await ytdlp(data.url, {
@@ -347,18 +351,15 @@ async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
                 audioQuality: "96K",
                 preferFfmpeg: true,
             });
+        } else if (isInstagramUrl(data.url)) {
+            await downloadWithGalleryDl(data.url, prefix);
         } else {
-            if (isInstagramUrl(data.url)) {
-                await downloadWithGalleryDl(data.url, prefix);
-            } else {
-                await ytdlp(data.url, {
-                    ...getYtDlpBaseOptions(),
-                    output: outputTemplate,
-                    format:
-                    "best[height<=720][ext=mp4]/best[height<=720]/best",
-                    mergeOutputFormat: "mp4",
-                });
-            }
+            await ytdlp(data.url, {
+                ...getYtDlpBaseOptions(),
+                output: outputTemplate,
+                format: "best[height<=720][ext=mp4]/best[height<=720]/best",
+                mergeOutputFormat: "mp4",
+            });
         }
         
         downloadedFile = getNewestFileByPrefix(prefix);
@@ -376,10 +377,7 @@ async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
                 await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
             }
             
-            return bot.editMessageText(`⚠️ Fayl juda katta: ${fileSizeMb.toFixed(1)} MB`, {
-                chat_id: chatId,
-                message_id: waitMsg.message_id,
-            });
+            return bot.sendMessage(chatId, `⚠️ Fayl juda katta: ${fileSizeMb.toFixed(1)} MB`);
         }
         
         const caption = `📥 @${BOT_USERNAME} orqali yuklab olindi`;
@@ -414,8 +412,6 @@ async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
         if (loadingMsg) {
             await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
         }
-        
-        await bot.deleteMessage(chatId, waitMsg.message_id).catch(() => {});
     } catch (error) {
         console.error("❌ Download xatolik:", error.message);
         removeFile(downloadedFile);
@@ -424,10 +420,7 @@ async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
             await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
         }
         
-        await bot.editMessageText("❌ Yuklab bo‘lmadi", {
-            chat_id: chatId,
-            message_id: waitMsg.message_id,
-        });
+        await bot.sendMessage(chatId, "❌ Yuklab bo‘lmadi");
     }
 }
 
@@ -470,16 +463,10 @@ bot.on("message", async (msg) => {
             return sendSearchResults(chatId, text);
         }
         
-        const loadingMsg = await sendLoading(chatId, msg.message_id);
         const info = await getMediaInfoByUrl(text);
-        
-        if (loadingMsg) {
-            await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
-        }
         
         if (isInstagramUrl(info.url)) {
             const cacheId = `${chatId}_${Date.now()}`;
-            
             mediaCache.set(cacheId, info);
             
             setTimeout(() => {
