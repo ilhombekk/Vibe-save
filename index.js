@@ -26,8 +26,7 @@ process.platform === "win32"
 ? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
 : "gallery-dl";
 
-const YT_DLP_PATH =
-process.platform === "win32" ? "yt-dlp" : "yt-dlp";
+const YT_DLP_PATH = "yt-dlp";
 
 app.get("/", (req, res) => {
     res.send("VibeSaveRobot ishlayapti 🔥");
@@ -66,6 +65,10 @@ function isInstagramUrl(url) {
 
 function hasCookies() {
     return fs.existsSync(COOKIES_PATH);
+}
+
+function buildCookieArgs() {
+    return hasCookies() ? ["--cookies", COOKIES_PATH] : [];
 }
 
 function safeName(name = "media") {
@@ -163,14 +166,9 @@ function getFormatKeyboard(cacheId, url) {
     };
 }
 
-function buildCookieArgs() {
-    if (!hasCookies()) return [];
-    return ["--cookies", COOKIES_PATH];
-}
-
 async function runYtDlp(args) {
     return execFileAsync(YT_DLP_PATH, args, {
-        maxBuffer: 1024 * 1024 * 20,
+        maxBuffer: 1024 * 1024 * 50,
     });
 }
 
@@ -317,7 +315,7 @@ async function downloadWithGalleryDl(url, prefix) {
     args.push("-D", DOWNLOAD_DIR, "-f", `${prefix}.{extension}`, url);
     
     await execFileAsync(GALLERY_DL_PATH, args, {
-        maxBuffer: 1024 * 1024 * 20,
+        maxBuffer: 1024 * 1024 * 50,
     });
 }
 
@@ -366,7 +364,7 @@ async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
                 "-o",
                 outputTemplate,
                 "-f",
-                "best[height<=720][ext=mp4]/best[height<=720]/best",
+                "bv*+ba/b",
                 "--merge-output-format",
                 "mp4",
                 "--no-warnings",
