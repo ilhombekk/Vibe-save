@@ -5,7 +5,7 @@ const express = require("express");
 const app = express();
 
 const TelegramBot = require("node-telegram-bot-api");
-const ytdlp = require("yt-dlp-exec");
+const ytdlpExec = require("yt-dlp-exec");
 const yts = require("yt-search");
 const fs = require("fs");
 const path = require("path");
@@ -19,15 +19,17 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const BOT_USERNAME = "VibeSaveRobot";
 const BOT_LINK = `https://t.me/${BOT_USERNAME}`;
 
-const GALLERY_DL_PATH =
-process.platform === "win32"
-? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
-: "gallery-dl";
-
 const YT_DLP_PATH =
 process.platform === "win32"
 ? path.join(__dirname, "node_modules", "yt-dlp-exec", "bin", "yt-dlp.exe")
-: "yt-dlp";
+: "/opt/render/project/.venv/bin/yt-dlp";
+
+const ytdlp = ytdlpExec.create(YT_DLP_PATH);
+
+const GALLERY_DL_PATH =
+process.platform === "win32"
+? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
+: "/opt/render/project/.venv/bin/gallery-dl";
 
 const COOKIES_PATH = path.join(__dirname, "cookies.txt");
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
@@ -169,7 +171,6 @@ function getFormatKeyboard(cacheId, url) {
 
 function getYtDlpBaseOptions() {
     const options = {
-        binary: YT_DLP_PATH,
         noWarnings: true,
         noCheckCertificates: true,
     };
@@ -377,7 +378,10 @@ async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
                 await bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
             }
             
-            return bot.sendMessage(chatId, `⚠️ Fayl juda katta: ${fileSizeMb.toFixed(1)} MB`);
+            return bot.sendMessage(
+                chatId,
+                `⚠️ Fayl juda katta: ${fileSizeMb.toFixed(1)} MB`
+            );
         }
         
         const caption = `📥 @${BOT_USERNAME} orqali yuklab olindi`;
