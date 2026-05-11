@@ -5,7 +5,6 @@ const express = require("express");
 const app = express();
 
 const TelegramBot = require("node-telegram-bot-api");
-const ytdlpExec = require("yt-dlp-exec");
 const yts = require("yt-search");
 const fs = require("fs");
 const path = require("path");
@@ -19,39 +18,16 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const BOT_USERNAME = "VibeSaveRobot";
 const BOT_LINK = `https://t.me/${BOT_USERNAME}`;
 
-const localYtDlpPath = path.join(
-    __dirname,
-    "node_modules",
-    "yt-dlp-exec",
-    "bin",
-    process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"
-);
-
-const YT_DLP_PATH = [
-    process.env.YT_DLP_PATH,
-    localYtDlpPath,
-    process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp",
-].find((p) => typeof p === "string" && (p === "yt-dlp" || p === "yt-dlp.exe" || fs.existsSync(p)));
-
-if (!YT_DLP_PATH) {
-    console.error("❌ yt-dlp binary topilmadi. Iltimos YT_DLP_PATH muhit o‘zgaruvchisini sozlang.");
-    process.exit(1);
-}
-
-const ytdlp = ytdlpExec.create(YT_DLP_PATH);
-
-const localGalleryDlPath = process.platform === "win32"
-    ? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
-    : "/opt/render/project/.venv/bin/gallery-dl";
-
-const GALLERY_DL_PATH = [
-    process.env.GALLERY_DL_PATH,
-    localGalleryDlPath,
-    "gallery-dl",
-].find((p) => typeof p === "string" && (p === "gallery-dl" || fs.existsSync(p))) || "gallery-dl";
-
 const COOKIES_PATH = path.join(__dirname, "cookies.txt");
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
+
+const GALLERY_DL_PATH =
+process.platform === "win32"
+? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
+: "gallery-dl";
+
+const YT_DLP_PATH =
+process.platform === "win32" ? "yt-dlp" : "yt-dlp";
 
 app.get("/", (req, res) => {
     res.send("VibeSaveRobot ishlayapti 🔥");
@@ -117,7 +93,6 @@ function getNewestFileByPrefix(prefix) {
     .sort((a, b) => b.time - a.time);
     
     if (!files.length) return null;
-    
     return path.join(DOWNLOAD_DIR, files[0].name);
 }
 
@@ -188,17 +163,15 @@ function getFormatKeyboard(cacheId, url) {
     };
 }
 
-function getYtDlpBaseOptions() {
-    const options = {
-        noWarnings: true,
-        noCheckCertificates: true,
-    };
-    
-    if (hasCookies()) {
-        options.cookies = COOKIES_PATH;
-    }
-    
-    return options;
+function buildCookieArgs() {
+    if (!hasCookies()) return [];
+    return ["--cookies", COOKIES_PATH];
+}
+
+async function runYtDlp(args) {
+    return execFileAsync(YT_DLP_PATH, args, {
+        maxBuffer: 1024 * 1024 * 20,
+    });
 }
 
 async function sendLoading(chatId, originalMessageId) {
@@ -211,11 +184,17 @@ async function sendLoading(chatId, originalMessageId) {
 
 async function getMediaInfoByUrl(mediaUrl) {
     try {
-        const info = await ytdlp(mediaUrl, {
-            ...getYtDlpBaseOptions(),
-            dumpSingleJson: true,
-            skipDownload: true,
-        });
+        const args = [
+            mediaUrl,
+            "--dump-single-json",
+            "--no-warnings",
+            "--no-check-certificates",
+            "--skip-download",
+            ...buildCookieArgs(),
+        ];
+        
+        const { stdout } = await runYtDlp(args);
+        const info = JSON.parse(stdout);
         
         return {
             url: info.webpage_url || mediaUrl,
@@ -337,7 +316,9 @@ async function downloadWithGalleryDl(url, prefix) {
     
     args.push("-D", DOWNLOAD_DIR, "-f", `${prefix}.{extension}`, url);
     
-    await execFileAsync(GALLERY_DL_PATH, args);
+    await execFileAsync(GALLERY_DL_PATH, args, {
+        maxBuffer: 1024 * 1024 * 20,
+    });
 }
 
 async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
@@ -362,24 +343,36 @@ async function downloadMedia(chatId, cacheId, type, originalMessageId = null) {
         const outputTemplate = path.join(DOWNLOAD_DIR, `${prefix}.%(ext)s`);
         
         if (type === "audio") {
-            await ytdlp(data.url, {
-                ...getYtDlpBaseOptions(),
-                output: outputTemplate,
-                format: "bestaudio/best",
-                extractAudio: true,
-                audioFormat: "mp3",
-                audioQuality: "96K",
-                preferFfmpeg: true,
-            });
+            await runYtDlp([
+                data.url,
+                "-o",
+                outputTemplate,
+                "-f",
+                "bestaudio/best",
+                "-x",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                "96K",
+                "--no-warnings",
+                "--no-check-certificates",
+                ...buildCookieArgs(),
+            ]);
         } else if (isInstagramUrl(data.url)) {
             await downloadWithGalleryDl(data.url, prefix);
         } else {
-            await ytdlp(data.url, {
-                ...getYtDlpBaseOptions(),
-                output: outputTemplate,
-                format: "best[height<=720][ext=mp4]/best[height<=720]/best",
-                mergeOutputFormat: "mp4",
-            });
+            await runYtDlp([
+                data.url,
+                "-o",
+                outputTemplate,
+                "-f",
+                "best[height<=720][ext=mp4]/best[height<=720]/best",
+                "--merge-output-format",
+                "mp4",
+                "--no-warnings",
+                "--no-check-certificates",
+                ...buildCookieArgs(),
+            ]);
         }
         
         downloadedFile = getNewestFileByPrefix(prefix);
