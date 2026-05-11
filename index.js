@@ -19,17 +19,22 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const BOT_USERNAME = "VibeSaveRobot";
 const BOT_LINK = `https://t.me/${BOT_USERNAME}`;
 
-const YT_DLP_PATH =
-process.platform === "win32"
-? path.join(__dirname, "node_modules", "yt-dlp-exec", "bin", "yt-dlp.exe")
-: "/opt/render/project/.venv/bin/yt-dlp";
+const defaultYtDlpPath = path.join(
+    __dirname,
+    "node_modules",
+    "yt-dlp-exec",
+    "bin",
+    process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"
+);
 
+const YT_DLP_PATH = process.env.YT_DLP_PATH || defaultYtDlpPath;
 const ytdlp = ytdlpExec.create(YT_DLP_PATH);
 
 const GALLERY_DL_PATH =
-process.platform === "win32"
-? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
-: "/opt/render/project/.venv/bin/gallery-dl";
+    process.env.GALLERY_DL_PATH ||
+    (process.platform === "win32"
+        ? "C:\\Users\\ilhom\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\gallery-dl.exe"
+        : "/opt/render/project/.venv/bin/gallery-dl");
 
 const COOKIES_PATH = path.join(__dirname, "cookies.txt");
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
